@@ -1,0 +1,124 @@
+---
+- name: Install and configure Redis for HumHub
+  hosts: localhost
+  become: yes
+  vars:
+    redis_maxmemory: "{{ redis_maxmemory | default('256mb') }}"
+    redis_port: 6379
+    
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required packages
+      apt:
+        name:
+          - redis-server
+          - python3-redis
+          - ufw
+          - htop
+          - vim
+          - curl
+          - wget
+        state: present
+
+    - name: Configure Redis
+      template:
+        src: redis.conf.j2
+        dest: /etc/redis/redis.conf
+        owner: redis
+        group: redis
+        mode: '0640'
+        backup: yes
+      notify: restart redis
+
+    - name: Configure Redis systemd override
+      copy:
+        content: |
+          [Service]
+          ExecStart=
+          ExecStart=/usr/bin/redis-server /etc/redis/redis.conf
+          TimeoutStopSec=0
+          Restart=always
+        dest: /etc/systemd/system/redis.service.d/override.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify:
+        - reload systemd
+        - restart redis
+
+    - name: Create systemd override directory
+      file:
+        path: /etc/systemd/system/redis.service.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Start and enable Redis service
+      systemd:
+        name: redis
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Configure firewall for Redis
+      ufw:
+        rule: allow
+        port: '6379'
+        src: '10.0.0.0/16'
+
+    - name: Configure firewall for SSH
+      ufw:
+        rule: allow
+        port: '22'
+
+    - name: Enable firewall
+      ufw:
+        state: enabled
+
+    - name: Create Redis backup directory
+      file:
+        path: /opt/redis-backups
+        state: directory
+        owner: redis
+        group: redis
+        mode: '0755'
+
+    - name: Create Redis backup script
+      template:
+        src: backup-redis.sh.j2
+        dest: /opt/redis-backups/backup-redis.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Setup Redis backup cron job
+      cron:
+        name: "Redis backup"
+        minute: "30"
+        hour: "2"
+        job: "/opt/redis-backups/backup-redis.sh"
+        user: root
+
+    - name: Test Redis connection
+      command: redis-cli ping
+      register: redis_ping
+      changed_when: false
+
+    - name: Display Redis status
+      debug:
+        msg: "Redis is responding: {{ redis_ping.stdout }}"
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: restart redis
+      systemd:
+        name: redis
+        state: restarted

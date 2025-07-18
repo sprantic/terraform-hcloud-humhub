@@ -1,0 +1,118 @@
+---
+- name: Install and configure MySQL for HumHub
+  hosts: localhost
+  become: yes
+  vars:
+    mysql_root_password: "{{ db_password }}"
+    mysql_humhub_password: "{{ db_password }}"
+    mysql_innodb_buffer_pool_size: "{{ mysql_innodb_buffer_pool_size | default('256M') }}"
+    
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required packages
+      apt:
+        name:
+          - mysql-server
+          - mysql-client
+          - python3-pymysql
+          - python3-pip
+          - ufw
+          - htop
+          - vim
+          - curl
+          - wget
+        state: present
+
+    - name: Start and enable MySQL service
+      systemd:
+        name: mysql
+        state: started
+        enabled: yes
+
+    - name: Set MySQL root password
+      mysql_user:
+        name: root
+        password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        state: present
+
+    - name: Create MySQL configuration file for root
+      template:
+        src: my.cnf.j2
+        dest: /root/.my.cnf
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Configure MySQL for HumHub
+      template:
+        src: humhub-mysql.cnf.j2
+        dest: /etc/mysql/mysql.conf.d/humhub.cnf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart mysql
+
+    - name: Create HumHub database
+      mysql_db:
+        name: humhub
+        collation: utf8mb4_unicode_ci
+        encoding: utf8mb4
+        state: present
+
+    - name: Create HumHub MySQL user
+      mysql_user:
+        name: humhub
+        password: "{{ mysql_humhub_password }}"
+        priv: 'humhub.*:ALL'
+        host: '%'
+        state: present
+
+    - name: Configure firewall for MySQL
+      ufw:
+        rule: allow
+        port: '3306'
+        src: '10.0.0.0/16'
+
+    - name: Configure firewall for SSH
+      ufw:
+        rule: allow
+        port: '22'
+
+    - name: Enable firewall
+      ufw:
+        state: enabled
+
+    - name: Create backup directory
+      file:
+        path: /opt/humhub-backups
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Create backup script
+      template:
+        src: backup-database.sh.j2
+        dest: /opt/humhub-backups/backup-database.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Setup daily backup cron job
+      cron:
+        name: "HumHub database backup"
+        minute: "0"
+        hour: "2"
+        job: "/opt/humhub-backups/backup-database.sh"
+        user: root
+
+  handlers:
+    - name: restart mysql
+      systemd:
+        name: mysql
+        state: restarted

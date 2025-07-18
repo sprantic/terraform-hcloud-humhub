@@ -1,0 +1,45 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - python3-pip
+  - python3-venv
+  - unzip
+  - curl
+  - wget
+
+write_files:
+  - path: /opt/ansible-setup.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -e
+      
+      # Create virtual environment for Ansible
+      python3 -m venv /opt/ansible-venv
+      source /opt/ansible-venv/bin/activate
+      
+      # Install Ansible
+      pip install ansible redis
+      
+      # Extract and run the Redis playbook
+      cd /opt
+      unzip -q humhub-ansible.zip
+      cd humhub-ansible
+      
+      # Run the Redis playbook
+      ansible-playbook -i localhost, -c local redis.yml \
+        -e "redis_maxmemory=${redis_maxmemory}"
+      
+      echo "Redis setup completed successfully"
+
+  - path: /opt/humhub-ansible.zip
+    encoding: base64
+    content: |
+      ${ansible_zip_content}
+
+runcmd:
+  - /opt/ansible-setup.sh
+
+final_message: "Redis server setup completed successfully"

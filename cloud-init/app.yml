@@ -1,0 +1,60 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - python3-pip
+  - python3-venv
+  - unzip
+  - curl
+  - wget
+
+write_files:
+  - path: /opt/ansible-setup.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -e
+      
+      # Create virtual environment for Ansible
+      python3 -m venv /opt/ansible-venv
+      source /opt/ansible-venv/bin/activate
+      
+      # Install Ansible
+      pip install ansible pymysql redis
+      
+      # Extract and run the app playbook
+      cd /opt
+      unzip -q humhub-ansible.zip
+      cd humhub-ansible
+      
+      # Run the application playbook
+      ansible-playbook -i localhost, -c local app.yml \
+        -e "db_host=${db_host}" \
+        -e "db_password=${db_password}" \
+        -e "redis_host=${redis_host}" \
+        -e "domain_name=${domain_name}" \
+        -e "php_version=${php_version}" \
+        -e "humhub_version=${humhub_version}" \
+        -e "nginx_worker_processes=${nginx_worker_processes}" \
+        -e "humhub_admin_email=${humhub_admin_email}" \
+        -e "humhub_admin_username=${humhub_admin_username}" \
+        -e "humhub_admin_password=${humhub_admin_password}" \
+        -e "enable_ssl=${enable_ssl}" \
+        -e "letsencrypt_email=${letsencrypt_email}" \
+        -e "keycloak_integration=${keycloak_integration}" \
+        -e "keycloak_server_url=${keycloak_server_url}" \
+        -e "keycloak_realm=${keycloak_realm}" \
+        -e "keycloak_client_id=${keycloak_client_id}"
+      
+      echo "Application setup completed successfully"
+
+  - path: /opt/humhub-ansible.zip
+    encoding: base64
+    content: |
+      ${ansible_zip_content}
+
+runcmd:
+  - /opt/ansible-setup.sh
+
+final_message: "Application server setup completed successfully"

@@ -1,0 +1,18 @@
+# Hetzner Cloud API token
+# Get this from https://console.hetzner.cloud/
+hcloud_token = "your-hetzner-cloud-api-token"
+
+# Name of existing SSH key in Hetzner Cloud
+# Create one in the Hetzner Cloud Console first, then reference it by name
+ssh_key_name = "sprantic-production-key"
+
+# HumHub admin password
+# Use a strong password for production
+humhub_admin_password = "your-secure-admin-password"
+
+# Security: Restrict SSH access to your IP addresses
+# Replace with your actual IP addresses for better security
+allowed_ssh_ips = [
+  "203.0.113.0/24",  # Replace with your office IP range
+  "198.51.100.0/24"  # Replace with your home IP range
+]

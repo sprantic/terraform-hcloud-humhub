@@ -1,0 +1,58 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - unzip
+  - python3
+  - python3-pip
+  - ansible
+
+write_files:
+  - path: /tmp/humhub-ansible.zip
+    content: ${ansible_zip_content}
+    encoding: b64
+    permissions: '0644'
+
+  - path: /opt/ansible-setup.sh
+    content: |
+      #!/bin/bash
+      set -e
+      
+      # Extract Ansible playbooks
+      cd /tmp
+      unzip -o humhub-ansible.zip
+      
+      # Run database setup
+      ansible-playbook -i localhost, -c local ansible/database.yml \
+        -e db_password="${db_password}" \
+        -e mysql_innodb_buffer_pool_size="${mysql_innodb_buffer_pool_size}"
+      
+      # Run app setup
+      ansible-playbook -i localhost, -c local ansible/app.yml \
+        -e db_host="localhost" \
+        -e db_password="${db_password}" \
+        -e redis_host="${redis_host}" \
+        -e domain_name="${domain_name}" \
+        -e php_version="${php_version}" \
+        -e humhub_version="${humhub_version}" \
+        -e nginx_worker_processes="${nginx_worker_processes}" \
+        -e humhub_admin_email="${humhub_admin_email}" \
+        -e humhub_admin_username="${humhub_admin_username}" \
+        -e humhub_admin_password="${humhub_admin_password}" \
+        -e enable_ssl="${enable_ssl}" \
+        -e letsencrypt_email="${letsencrypt_email}" \
+        -e keycloak_integration="${keycloak_integration}" \
+        -e keycloak_server_url="${keycloak_server_url}" \
+        -e keycloak_realm="${keycloak_realm}" \
+        -e keycloak_client_id="${keycloak_client_id}"
+      
+      # Clean up
+      rm -f /tmp/humhub-ansible.zip
+      rm -rf /tmp/ansible
+      
+      echo "HumHub installation completed successfully!"
+    permissions: '0755'
+
+runcmd:
+  - /opt/ansible-setup.sh > /var/log/ansible-setup.log 2>&1

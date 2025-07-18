@@ -1,0 +1,233 @@
+---
+- name: Install and configure HumHub application server
+  hosts: localhost
+  become: yes
+  vars:
+    php_version: "{{ php_version | default('8.1') }}"
+    humhub_version: "{{ humhub_version | default('1.15') }}"
+    domain_name: "{{ domain_name | default('') }}"
+    db_host: "{{ db_host }}"
+    db_password: "{{ db_password }}"
+    redis_host: "{{ redis_host }}"
+    nginx_worker_processes: "{{ nginx_worker_processes | default(2) }}"
+    humhub_admin_email: "{{ humhub_admin_email | default('admin@example.com') }}"
+    humhub_admin_username: "{{ humhub_admin_username | default('admin') }}"
+    humhub_admin_password: "{{ humhub_admin_password | default('admin123') }}"
+    enable_ssl: "{{ enable_ssl | default(true) }}"
+    letsencrypt_email: "{{ letsencrypt_email | default('') }}"
+    
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required packages
+      apt:
+        name:
+          - nginx
+          - "php{{ php_version }}-fpm"
+          - "php{{ php_version }}-mysql"
+          - "php{{ php_version }}-redis"
+          - "php{{ php_version }}-gd"
+          - "php{{ php_version }}-curl"
+          - "php{{ php_version }}-zip"
+          - "php{{ php_version }}-xml"
+          - "php{{ php_version }}-mbstring"
+          - "php{{ php_version }}-intl"
+          - "php{{ php_version }}-ldap"
+          - "php{{ php_version }}-imagick"
+          - "php{{ php_version }}-cli"
+          - mysql-client
+          - unzip
+          - curl
+          - wget
+          - git
+          - certbot
+          - python3-certbot-nginx
+          - ufw
+          - htop
+          - vim
+        state: present
+
+    - name: Create web directory
+      file:
+        path: /var/www/humhub
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Download HumHub
+      get_url:
+        url: "https://github.com/humhub/humhub/releases/download/v{{ humhub_version }}/humhub-{{ humhub_version }}.tar.gz"
+        dest: "/tmp/humhub-{{ humhub_version }}.tar.gz"
+        mode: '0644'
+
+    - name: Extract HumHub
+      unarchive:
+        src: "/tmp/humhub-{{ humhub_version }}.tar.gz"
+        dest: /var/www/humhub
+        remote_src: yes
+        owner: www-data
+        group: www-data
+        extra_opts: [--strip-components=1]
+
+    - name: Set HumHub directory permissions
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+        recurse: yes
+      loop:
+        - /var/www/humhub/protected/runtime
+        - /var/www/humhub/protected/config
+        - /var/www/humhub/uploads
+        - /var/www/humhub/assets
+
+    - name: Configure PHP-FPM
+      template:
+        src: php-fpm-humhub.conf.j2
+        dest: "/etc/php/{{ php_version }}/fpm/pool.d/humhub.conf"
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart php-fpm
+
+    - name: Configure PHP settings
+      template:
+        src: php-humhub.ini.j2
+        dest: "/etc/php/{{ php_version }}/fpm/conf.d/99-humhub.ini"
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart php-fpm
+
+    - name: Configure Nginx
+      template:
+        src: nginx-humhub.conf.j2
+        dest: /etc/nginx/sites-available/humhub
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart nginx
+
+    - name: Enable Nginx site
+      file:
+        src: /etc/nginx/sites-available/humhub
+        dest: /etc/nginx/sites-enabled/humhub
+        state: link
+      notify: restart nginx
+
+    - name: Remove default Nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: restart nginx
+
+    - name: Configure Nginx main settings
+      template:
+        src: nginx.conf.j2
+        dest: /etc/nginx/nginx.conf
+        owner: root
+        group: root
+        mode: '0644'
+        backup: yes
+      notify: restart nginx
+
+    - name: Start and enable services
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - nginx
+        - "php{{ php_version }}-fpm"
+
+    - name: Create HumHub configuration
+      template:
+        src: humhub-config.php.j2
+        dest: /var/www/humhub/protected/config/dynamic.php
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    - name: Configure firewall for HTTP/HTTPS
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+      loop:
+        - '80'
+        - '443'
+        - '22'
+
+    - name: Enable firewall
+      ufw:
+        state: enabled
+
+    - name: Setup SSL certificate with Let's Encrypt
+      command: >
+        certbot --nginx --non-interactive --agree-tos 
+        --email {{ letsencrypt_email }} 
+        -d {{ domain_name }}
+      when: enable_ssl and domain_name != "" and letsencrypt_email != ""
+      ignore_errors: yes
+
+    - name: Create HumHub installation script
+      template:
+        src: install-humhub.sh.j2
+        dest: /opt/install-humhub.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Run HumHub installation
+      command: /opt/install-humhub.sh
+      args:
+        creates: /var/www/humhub/protected/config/common.php
+
+    - name: Create backup directory
+      file:
+        path: /opt/humhub-backups
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Create backup script
+      template:
+        src: backup-humhub.sh.j2
+        dest: /opt/humhub-backups/backup-humhub.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Setup backup cron job
+      cron:
+        name: "HumHub backup"
+        minute: "0"
+        hour: "3"
+        job: "/opt/humhub-backups/backup-humhub.sh"
+        user: root
+
+    - name: Configure Keycloak integration (if enabled)
+      template:
+        src: keycloak-config.php.j2
+        dest: /var/www/humhub/protected/config/keycloak.php
+        owner: www-data
+        group: www-data
+        mode: '0644'
+      when: keycloak_integration | default(false)
+
+  handlers:
+    - name: restart nginx
+      systemd:
+        name: nginx
+        state: restarted
+
+    - name: restart php-fpm
+      systemd:
+        name: "php{{ php_version }}-fpm"
+        state: restarted

@@ -1,0 +1,46 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - python3-pip
+  - python3-venv
+  - unzip
+  - curl
+  - wget
+
+write_files:
+  - path: /opt/ansible-setup.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -e
+      
+      # Create virtual environment for Ansible
+      python3 -m venv /opt/ansible-venv
+      source /opt/ansible-venv/bin/activate
+      
+      # Install Ansible
+      pip install ansible pymysql
+      
+      # Extract and run the database playbook
+      cd /opt
+      unzip -q humhub-ansible.zip
+      cd humhub-ansible
+      
+      # Run the database playbook
+      ansible-playbook -i localhost, -c local database.yml \
+        -e "db_password=${db_password}" \
+        -e "mysql_innodb_buffer_pool_size=${mysql_innodb_buffer_pool_size}"
+      
+      echo "Database setup completed successfully"
+
+  - path: /opt/humhub-ansible.zip
+    encoding: base64
+    content: |
+      ${ansible_zip_content}
+
+runcmd:
+  - /opt/ansible-setup.sh
+
+final_message: "Database server setup completed successfully"

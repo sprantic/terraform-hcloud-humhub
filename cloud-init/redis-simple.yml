@@ -1,0 +1,28 @@
+#cloud-config
+package_update: true
+
+packages:
+  - redis-server
+
+write_files:
+  - path: /etc/redis/redis.conf
+    content: |
+      bind 0.0.0.0
+      port 6379
+      protected-mode no
+      maxmemory ${redis_maxmemory}
+      maxmemory-policy allkeys-lru
+      save 900 1
+      save 300 10
+      save 60 10000
+      dir /var/lib/redis
+      logfile /var/log/redis/redis-server.log
+      loglevel notice
+    permissions: '0644'
+
+runcmd:
+  - systemctl enable redis-server
+  - systemctl start redis-server
+  - systemctl status redis-server
+
+final_message: "Redis server setup completed successfully"

@@ -1,0 +1,59 @@
+# Hetzner Cloud API token
+# Get this from https://console.hetzner.cloud/
+hcloud_token = "your-hetzner-cloud-api-token"
+
+# Project configuration
+project_name = "my-humhub"
+
+# Name of existing SSH key in Hetzner Cloud
+# Create one in the Hetzner Cloud Console first, then reference it by name
+ssh_key_name = "my-existing-ssh-key"
+
+# Server configuration
+server_location        = "nbg1"  # Nuremberg, Germany
+app_server_type        = "cx21"  # 2 vCPUs, 4 GB RAM
+database_server_type   = "cx21"  # 2 vCPUs, 4 GB RAM
+redis_server_type      = "cx11"  # 1 vCPU, 4 GB RAM
+
+# Network configuration
+network_cidr = "10.0.0.0/16"
+subnet_cidr  = "10.0.1.0/24"
+
+# Domain and SSL configuration
+domain_name       = "humhub.sprantic.ai"
+enable_ssl        = true
+letsencrypt_email = "admin@sprantic.ai"  # Change to your email for Let's Encrypt
+
+# HumHub configuration
+humhub_version        = "1.15"
+humhub_admin_email    = "admin@example.com"
+humhub_admin_username = "admin"
+humhub_admin_password = ""  # Leave empty to auto-generate
+
+# Security
+# Restrict SSH access to your IP address for better security
+allowed_ssh_ips = ["0.0.0.0/0"]  # Change to your IP: ["1.2.3.4/32"]
+
+# Optional features
+enable_load_balancer = false
+backup_enabled       = true
+monitoring_enabled   = false
+
+# Single server mode (reduces from 3 servers to 2 - app+database combined)
+single_server_mode = false
+
+# Use floating IPs to bypass Primary IP limits (costs extra ~€1.19/month per IP)
+use_floating_ips = false
+
+# Keycloak SSO integration (optional)
+keycloak_integration = false
+keycloak_server_url  = ""  # e.g., "https://keycloak.example.com"
+keycloak_realm       = "humhub"
+keycloak_client_id   = "humhub"
+
+# Tags
+tags = {
+  Environment = "production"
+  Project     = "humhub"
+  Owner       = "your-name"
+}

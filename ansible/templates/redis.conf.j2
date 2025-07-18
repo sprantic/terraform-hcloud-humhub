@@ -1,0 +1,31 @@
+# Redis configuration for HumHub
+bind 0.0.0.0
+port {{ redis_port }}
+timeout 0
+tcp-keepalive 300
+
+# Memory management
+maxmemory {{ redis_maxmemory }}
+maxmemory-policy allkeys-lru
+
+# Persistence
+save 900 1
+save 300 10
+save 60 10000
+
+stop-writes-on-bgsave-error yes
+rdbcompression yes
+rdbchecksum yes
+dbfilename dump.rdb
+dir /var/lib/redis
+
+# Logging
+loglevel notice
+logfile /var/log/redis/redis-server.log
+
+# Security
+requirepass {{ redis_password | default('') }}
+
+# Performance
+tcp-backlog 511
+databases 16
